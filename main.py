@@ -22,7 +22,7 @@ async def root(request: Request):
     response = requests.get(
         "https://e621.net/posts.json",
         params={"tags": tags, "page": page, "limit": 10},
-        headers={"User-Agent": "rogerinho/1.0"}
+        headers={"User-Agent": "e621byrogerinho/1.0 userscript"}
     )
 
     if response.status_code != 200:
