@@ -1,39 +1,40 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-import requests
-import os
+from fastapi import FastAPI
+from pydantic import BaseModel
+from PIL import Image
+import aiohttp
+import io
+import base64
 
 app = FastAPI()
 
-# Libera requisições de qualquer origem (para Roblox)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+class ImageRequest(BaseModel):
+    url: str
+    width: int = 128
+    height: int = 128
 
-@app.post("/")
-async def root(request: Request):
-    body = await request.json()
-    tags = body.get("tags", "")
-    page = body.get("page", 1)
+@app.post("/process-image")
+async def process_image(req: ImageRequest):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(req.url) as resp:
+                if resp.status != 200:
+                    return {"error": "Failed to download image"}
+                data = await resp.read()
+    except Exception as e:
+        return {"error": str(e)}
 
-    response = requests.get(
-        "https://e621.net/posts.json",
-        params={"tags": tags, "page": page, "limit": 10},
-        headers={"User-Agent": "e621byrogerinho/1.0 userscript"}
-    )
+    try:
+        image = Image.open(io.BytesIO(data)).convert("RGB")
+        image = image.resize((req.width, req.height), Image.LANCZOS)
 
-    if response.status_code != 200:
-        return {"error": "Erro ao buscar"}
+        raw_bytes = image.tobytes()
+        encoded = base64.b64encode(raw_bytes).decode("ascii")
 
-    data = response.json()
-    posts = data.get("posts", [])
-    images = []
+        return {
+            "width": req.width,
+            "height": req.height,
+            "pixels": encoded
+        }
 
-    for post in posts:
-        if "file" in post and "url" in post["file"]:
-            images.append(post["file"]["url"])
-
-    return {"images": images}
+    except Exception as e:
+        return {"error": str(e)}
