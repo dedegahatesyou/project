@@ -22,11 +22,11 @@ async def root(request: Request):
     response = requests.get(
         "https://e621.net/posts.json",
         params={"tags": tags, "page": page, "limit": 10},
-        headers={"User-Agent": "rogerinho/1.0 (by rogerinho on e621)"}
+        headers={"User-Agent": "rogerinho/1.0"}
     )
 
     if response.status_code != 200:
-        return {"error": "Erro ao buscar do e621"}
+        return {"error": "Erro ao buscar"}
 
     data = response.json()
     posts = data.get("posts", [])
