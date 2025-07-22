@@ -1,35 +1,39 @@
 from fastapi import FastAPI, Request
-from PIL import Image
-from io import BytesIO
+from fastapi.middleware.cors import CORSMiddleware
 import requests
-import base64
-import uvicorn
+import os
 
 app = FastAPI()
 
-@app.post("/process")
-async def process_images(request: Request):
-    data = await request.json()
-    results = []
+# Libera requisições de qualquer origem (para Roblox)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    for post in data[:10]:  # limitar a 10 para testes
-        file_url = post.get("file", {}).get("url")
-        if not file_url:
-            continue
-        try:
-            img_response = requests.get(file_url, timeout=5)
-            img = Image.open(BytesIO(img_response.content)).convert("RGB")
-            img = img.resize((128, 128))
+@app.post("/")
+async def root(request: Request):
+    body = await request.json()
+    tags = body.get("tags", "")
+    page = body.get("page", 1)
 
-            buffer = BytesIO()
-            img.save(buffer, format="JPEG", quality=70)
-            encoded = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    response = requests.get(
+        "https://e621.net/posts.json",
+        params={"tags": tags, "page": page, "limit": 10},
+        headers={"User-Agent": "rogerinho/1.0 (by rogerinho on e621)"}
+    )
 
-            results.append(encoded)
-        except:
-            continue
+    if response.status_code != 200:
+        return {"error": "Erro ao buscar do e621"}
 
-    return {"images": results}
+    data = response.json()
+    posts = data.get("posts", [])
+    images = []
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=80)
+    for post in posts:
+        if "file" in post and "url" in post["file"]:
+            images.append(post["file"]["url"])
+
+    return {"images": images}
