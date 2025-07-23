@@ -1,40 +1,30 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, Request
+import requests
+from io import BytesIO
 from PIL import Image
-import aiohttp
-import io
 import base64
 
 app = FastAPI()
 
-class ImageRequest(BaseModel):
-    url: str
-    width: int = 128
-    height: int = 128
+@app.post("/api/process-image")
+async def process_image(request: Request):
+    body = await request.json()
+    image_url = body["url"]
 
-@app.post("/process-image")
-async def process_image(req: ImageRequest):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(req.url) as resp:
-                if resp.status != 200:
-                    return {"error": "Failed to download image"}
-                data = await resp.read()
-    except Exception as e:
-        return {"error": str(e)}
+    # Download image
+    response = requests.get(image_url)
+    image = Image.open(BytesIO(response.content))
 
-    try:
-        image = Image.open(io.BytesIO(data)).convert("RGB")
-        image = image.resize((req.width, req.height), Image.LANCZOS)
+    # Resize and convert to RGB JPEG
+    image = image.convert("RGB")
+    image = image.resize((128, 128))  # Example size
 
-        raw_bytes = image.tobytes()
-        encoded = base64.b64encode(raw_bytes).decode("ascii")
+    # Convert to raw pixel data
+    pixels = list(image.getdata())
+    flat_pixels = [val for rgb in pixels for val in rgb]  # Flatten RGB
 
-        return {
-            "width": req.width,
-            "height": req.height,
-            "pixels": encoded
-        }
+    # Convert to base64 for transmission
+    byte_data = bytes(flat_pixels)
+    encoded = base64.b64encode(byte_data).decode("utf-8")
 
-    except Exception as e:
-        return {"error": str(e)}
+    return { "pixelData": encoded, "width": 128, "height": 128 }
